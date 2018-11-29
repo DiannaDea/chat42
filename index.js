@@ -7,13 +7,18 @@ const app = express();
 const server = http.Server(app);
 const io = new SocketIO(server);
 const port = process.env.PORT || 3000;
-const Room = function (user) {
+const Room = function (user, g, p, key) {
   this.id = shortid.generate();
   this.users = new Set([user]);
+  this.userRoles = { alice: user };
+  this.g = g;
+  this.p = p;
+  this.key = key;
   return this;
 };
 Room.prototype.addUser = function (newUser) {
   this.users.add(newUser);
+  this.userRoles.bob = newUser;
   return this;
 };
 Room.prototype.removeUser = function (user) {
@@ -32,8 +37,8 @@ Room.prototype.toString = function () {
 const RoomList = function () {
   this.rooms = [];
 };
-RoomList.prototype.addRoom = function (user) {
-  const newRoom = new Room(user);
+RoomList.prototype.addRoom = function (user, g, p, key) {
+  const newRoom = new Room(user, g, p, key);
   this.rooms.push(newRoom);
   return newRoom.id;
 };
@@ -73,15 +78,24 @@ const roomList = new RoomList();
 app.use(express.static(`${__dirname}/client/public`));
 
 io.on('connection', socket => {
-  let roomId = socket.handshake.query.roomId;
+  let { roomId } = socket.handshake.query;
   console.log(`User Connected, roomId: ${roomId}`);
 
   if (roomId && roomList.roomExist(roomId)) {
     const added = roomList.addUserToRoom(socket.id, roomId);
     if (added) {
       socket.join(roomId);
+      const { g, p, key } = roomList.findById(roomId);
+      socket.emit('sendAliceData', { g, p, key });
+
       socket.broadcast.to(roomId).emit('join');
-      console.log(`User enter the room. ${roomList}`);
+
+      socket.on('bobKeyGenerated', bobKey => {
+        console.log('BOB KEY: ', bobKey);
+        const room = roomList.findById(roomId);
+        io.to(room.userRoles.alice).emit('sendBobKey', bobKey);
+      });
+      console.log(`User entered the room. ${roomList}`);
     } else {
       socket.emit(
         'tryAnotherRoom',
@@ -96,13 +110,19 @@ io.on('connection', socket => {
     if (roomId) {
       socket.emit(
         'tryAnotherRoom',
-        'That room does not exist'
+        'That room does not exist',
       );
     }
-    roomId = roomList.addRoom(socket.id);
-    socket.join(roomId);
-    console.log(`New room added, user joined, roomList: ${roomList}`);
-    socket.emit('room', roomId);
+
+    socket.on('aliceDataGenerated', ({ g, p, key }) => {
+      roomId = roomList.addRoom(socket.id, g, p, key);
+      socket.join(roomId);
+      console.log('ALICE DATA GENERATED', g, p, key, roomId);
+
+
+      console.log(`New room added, user joined, roomList: ${roomList}`);
+      socket.emit('room', roomId);
+    });
   }
   socket.on('message', msg => socket.broadcast.to(roomId).emit('message', msg));
   socket.on('disconnect', () => {

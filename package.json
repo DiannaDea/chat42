@@ -7,6 +7,7 @@
   "license": "MIT",
   "dependencies": {
     "classnames": "^2.2.5",
+    "diffie-hellman": "https://github.com/crypto-browserify/diffie-hellman.git",
     "express": "^4.15.3",
     "install": "^0.10.1",
     "npm": "^4.6.1",
@@ -41,10 +42,8 @@
   },
   "scripts": {
     "build": "webpack -p --config webpack.config.prod.js",
-
     "dev_front": "webpack-dashboard -- webpack -w --config webpack.config.dev.js",
     "dev_back": "nodemon index",
-
     "prestart": "yarn build",
     "start": "node index"
   }

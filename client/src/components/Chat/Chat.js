@@ -39,6 +39,7 @@ export default class Chat extends Component {
             this.state.messages.map(msg =>
               (
                 <div
+                  key={msg}
                   className={
                     classNames(
                       styles.message,

@@ -3,8 +3,10 @@ import io from 'socket.io-client';
 import CopyToClipboard from 'react-copy-to-clipboard';
 import classNames from 'classnames';
 import queryString from 'query-string';
+import crypto from 'diffie-hellman/browser';
 
 import Chat from '../Chat';
+
 
 import styles from './Clipboard.styl';
 
@@ -22,14 +24,51 @@ export default class App extends Component {
       flashMessageType: null,
       flashMessageVisible: false,
       roomId: queryString.parse(location.search).roomId,
+      secret: '',
     };
+
+    const { roomId } = this.state;
+
+    const query = roomId ? { roomId } : {};
     this.socket = io.connect(process.env.HOST, {
-      query: { roomId: this.state.roomId ? this.state.roomId : '' },
+      query,
     });
-    this.socket.on('room', roomId => this.setState({
-      ...this.state,
-      link: `${window.location}?roomId=${roomId}`,
-    }));
+
+    // Alice part
+    if (!roomId) {
+      const alice = crypto.createDiffieHellman(128);
+      const aliceKey = alice.generateKeys();
+      const diffieParams = {
+        g: alice.getGenerator(),
+        p: alice.getPrime(),
+        key: aliceKey,
+      };
+      this.socket.emit('aliceDataGenerated', diffieParams);
+      this.socket.on('sendBobKey', bobKey => {
+        console.log('BOB KEY: ', bobKey);
+        const keyBuff = Buffer.from(bobKey);
+        const secret = alice.computeSecret(keyBuff);
+        this.setState({ secret });
+        console.log('ALICE SECRET: ', secret);
+      });
+    }
+
+    this.socket.on('sendAliceData', ({ g, p, key }) => {
+      const bob = crypto.createDiffieHellman(p, g);
+      const bobKey = bob.generateKeys();
+      this.socket.emit('bobKeyGenerated', bobKey);
+      const keyBuff = Buffer.from(key);
+      const secret = bob.computeSecret(keyBuff);
+      this.setState({ secret });
+      console.log('BOB SECRET: ', secret);
+    });
+
+    this.socket.on('room', roomId => {
+      this.setState({
+        ...this.state,
+        link: `${window.location}?roomId=${roomId}`,
+      });
+    });
     this.socket.on('join', () => {
       this.addFlashMessage('success', 'Your friend is here, everything great!');
       this.setState({ ...this.state, join: true });
