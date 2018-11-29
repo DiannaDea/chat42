@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import classNames from 'classnames';
+import CryptoJS from 'crypto-js';
 
 import styles from './Chat.styl';
 
@@ -10,18 +11,26 @@ export default class Chat extends Component {
       value: '',
       messages: [],
     };
-    props.socket.on('message', text => this.setState({
-      ...this.state,
-      messages: [
-        ...this.state.messages,
-        { text, mine: false },
-      ],
-    }));
+    this.props.socket.on('message', text => {
+      const t = CryptoJS.DES.decrypt(text, this.props.secret.toString()).toString(CryptoJS.enc.Utf8);
+      console.log(text, 'decrypted: ', t, 'secret: ', this.props.secret.toString());
+      this.setState({
+        ...this.state,
+        messages: [
+          ...this.state.messages,
+          {
+            text: t,
+            mine: false,
+          },
+        ],
+      });
+    });
     this.sendMessage = this.sendMessage.bind(this);
   }
   sendMessage() {
     const text = this.state.value;
-    this.props.socket.emit('message', text);
+    const t = CryptoJS.DES.encrypt(text, this.props.secret.toString());
+    this.props.socket.emit('message', t.toString());
     this.setState({
       ...this.state,
       value: '',
@@ -36,10 +45,10 @@ export default class Chat extends Component {
       <div className={styles.chat}>
         <div className={styles.messageBoard}>
           {
-            this.state.messages.map(msg =>
+            this.state.messages.map((msg, i) =>
               (
                 <div
-                  key={msg}
+                  key={msg + i}
                   className={
                     classNames(
                       styles.message,

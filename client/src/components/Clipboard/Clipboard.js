@@ -140,7 +140,7 @@ export default class App extends Component {
         </div>
         {
           (this.state.join || this.state.roomId)
-          ? <Chat socket={this.socket} />
+          ? <Chat secret={this.state.secret} socket={this.socket} />
           : <Clipboard link={this.state.link} copyHandler={this.copyHandler} />
         }
       </div>
